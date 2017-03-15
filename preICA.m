@@ -57,8 +57,8 @@ for subno=1:length(sublist)
     EEG = pop_select(EEG,'nochannel',[ find(strcmpi({EEG.chanlocs.labels},'EXG1')) find(strcmpi({EEG.chanlocs.labels},'EXG2')) find(strcmpi({EEG.chanlocs.labels},'EXG4')) find(strcmpi({EEG.chanlocs.labels},'EXG6'))  find(strcmpi({EEG.chanlocs.labels},'EXG8')) ]);
     EEG = pop_select(EEG,'nochannel',[ find(strcmpi({EEG.chanlocs.labels},'Erg1')) find(strcmpi({EEG.chanlocs.labels},'Erg2')) find(strcmpi({EEG.chanlocs.labels},'GSR1')) find(strcmpi({EEG.chanlocs.labels},'GSR2')) find(strcmpi({EEG.chanlocs.labels},'Resp')) find(strcmpi({EEG.chanlocs.labels},'Plet')) find(strcmpi({EEG.chanlocs.labels},'Temp')) ]);
     
-    % (high-pass) filter; takes a while!
-    EEG = pop_eegfilt(EEG,.5,0);
+    % (high-pass) filter; quite fast with eegfiltnew; make sure you have an eeglab version that has this updated function
+    EEG = pop_eegfiltnew(EEG,.5,0);
     
     %%
     
