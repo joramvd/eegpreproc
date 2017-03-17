@@ -168,14 +168,7 @@ for subno=1:length(sublist)
         
         %% Epoch the data
         
-        triggers={ %              raw      trigger before
-            %                      correct saccade
-            'forc_choice'    { '13' };
-            'free_choice'    { '14' };
-            };
-        
-        % now epoch on correct saccades after a search display
-        EEG = pop_epoch( EEG,[triggers{:,2}], epochtime);
+        EEG = pop_epoch( EEG, triggers, epochtime);
         EEG = applytochannels(EEG, [1:64] ,' pop_rmbase( EEG, []);');
         
         %% check for bad channels
@@ -192,32 +185,34 @@ for subno=1:length(sublist)
             colorbar
         end
         colormap hot
+        saveas(gcf,[writdir sublist{subno}(1:4) '_bad_electrode_check.png'])
         figure
         subplot(211)
         topoplot([],EEG.chanlocs(1:64),'style','empty','electrodes','labels');
         subplot(212)
         topoplot([],EEG.chanlocs(1:64),'style','empty','electrodes','numbers');
         keyboard
-        
+
         %% custom-written artifact rejection based on Fieldtrip routines
         
         FT_EEG = eeglab2ft(EEG);
         
-        cfg=[];
+        cfg = [];
         cfg.channel = {EEG.chanlocs(1:64).labels}';
         dat = ft_selectdata(cfg,FT_EEG);
         dat = dat.trial;
         dat_filt = cell(size(dat));
         
         cfg=[];
+        % these are standard fieldtrip settings taken from online tutorial
         cfg.bpfreq = [110 140];
         cfg.bpfiltord = 6;
         cfg.bpfilttype = 'but';
         cfg.hilbert = 'yes';
         cfg.boxcar = 0.2;
-        cfg.channels = 1:64;
-        cfg.cutoff = 12;
-        cfg.art_time = [-1 1]; % window within which artifacts are not allowed; note: also use this window for ICA!
+        cfg.channels = 1:nchan;
+        cfg.cutoff = artcutoff;
+        cfg.art_time = artiftime; % window within which artifacts are not allowed; note: also use this window for ICA!
         
         %-% loop over trials
         reverseStr='';
@@ -285,7 +280,7 @@ for subno=1:length(sublist)
         plot([zsum{:}])
         hold on
         plot([1 length([zsum{:}])], [cfg.threshold cfg.threshold],'m')
-        
+        saveas(cfg,[ writdir sublist{subno}(1:4) '_zvals_rejectedtrials.png')
         rejected_trials = zeros(1,numtrl);
         for ei=1:numtrl
             if sum(zsum{ei}>cfg.threshold)>0
@@ -319,7 +314,7 @@ for subno=1:length(sublist)
         
         %% sets bad channels to zero if necessary
         
-        fid=fopen([writdir 'chans2interp.txt'],'r');
+        fid=fopen([writdir chanfilename],'r');
         chans2interp={};
         while ~feof(fid)
             aline=regexp(fgetl(fid),'\t','split');
@@ -329,8 +324,8 @@ for subno=1:length(sublist)
             end
         end
         
-        chanind=1:64;
-        subject_prefix = sublist{subno}(1:3);
+        chanind=1:nchan;
+        subject_prefix = sublist{subno}(1:4);
         chans = chans2interp(strcmpi(chans2interp(:,1),subject_prefix),2:end);
         if ~isempty(chans{1})
             bad_chansidx = zeros(1,length(chans));
@@ -377,7 +372,7 @@ for subno=1:length(sublist)
         
         %% Temporarily remove bad channels
         
-        fid=fopen([writdir 'chans2interp.txt'],'r');
+        fid=fopen([writdir chanfilename],'r');
         chans2interp={};
         while ~feof(fid)
             aline=regexp(fgetl(fid),'\t','split');
@@ -387,7 +382,7 @@ for subno=1:length(sublist)
             end
         end
         
-        chanind=1:64;
+        chanind=1:nchan;
         subject_prefix = sublist{subno}(1:3);
         chans = chans2interp(strcmpi(chans2interp(:,1),subject_prefix),2:end);
         if ~isempty(chans{1})
@@ -399,7 +394,7 @@ for subno=1:length(sublist)
             chanind(bad_chansidx)=[];
         end
         
-        fid=fopen('ICs2remove.txt','r');
+        fid=fopen([writdir icafilename],'r');
         comps2remove={};
         while ~feof(fid)
             aline=regexp(fgetl(fid),'\t','split');
@@ -410,18 +405,14 @@ for subno=1:length(sublist)
         %%
         if sum(bad_chansidx)>0
             
-            EEG2 = pop_select(EEG,'nochannel',[bad_chansidx 65 66]);
-            
-            %% detect oculomotor ICs informed by eye-tracker
-            
-            
+            EEG2 = pop_select(EEG,'nochannel',[bad_chansidx nchan+1 nchan+2]);
             EEG2 = pop_subcomp( EEG2, comps2remove{subno,2}', 0);
             
             %% put IC-cleaned channels back in original EEG structure and interpolate bad ones
             
             good_chans = 1:EEG.nbchan;
             if sum(bad_chansidx)>0
-                good_chans([bad_chansidx 65 66])=[];
+                good_chans([bad_chansidx nchan+1 nchan+2])=[];
                 EEG.data(good_chans,:,:) = EEG2.data;
                 EEG = eeg_interp(EEG,bad_chansidx);
             else
@@ -430,16 +421,6 @@ for subno=1:length(sublist)
             
             clear EEG2
         else
-            [EEG,~,bad] = pop_eyetrackerica(EEG,'saccade','fixation',[5 5] ,1.1,3,1,1);
-            prompt = 'Do you agree with selected components? y/n --> ';
-            agree = input(prompt,'s');
-            if strcmp(agree,'y')
-                comps2remove = bad;
-            elseif strcmp(agree,'n')
-                prompt = 'Please provide alternative component selection: --> ';
-                newbad = input(prompt);
-                comps2remove = newbad;
-            end
             EEG = pop_subcomp( EEG, comps2remove{subno,2}', 0);
         end
         
