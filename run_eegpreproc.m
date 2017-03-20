@@ -1,9 +1,11 @@
 %% run brand new eegpreproc function
 
 restoredefaultpath
+
+%%
 cd('Z:\Stuff\eegpreproc\')
 
-%% part I: loading raw data and filter
+%-% part I: loading raw data and filter
 cfg = [];
 cfg.eeglab_path = 'Z:\Toolboxes\eeglab12_0_2_3b';
 cfg.ft_path     = 'Z:\Toolboxes\fieldtrip-20150318';
@@ -16,23 +18,26 @@ cfg.nchan       = 64;
 cfg.reref       = {'EXG5','EXG6'};
 cfg.veog        = {'EXG1','EXG2'};
 cfg.heog        = {'EXG3','EXG4'};
-cfg.resample    = 512;
+cfg.resrate     = 512;
 
-eegpreproc(cfg);
+%-% part II: epoching and trial rejection marking
 
-%% part II: epoching and trial rejection marking
+triggers={
+	'conditionA'	{ '1' };
+	'conditionB'	{ '2' };
+	};
+
 cfg.epochtime   = [-1.5 2.5];
 cfg.artiftime   = [-0.5 1];
 cfg.artcutoff   = 12;
-cfg.triggers    = [21:23 31:33 41:43];
+cfg.triggers    = triggers;
 cfg.trigger_subtract = []; % depending on physical lab settings, sometimes weird high numbers get added to the trigger values specified in your experiment script
 
-eegpreproc(cfg);
-
-%% part III: ICA
+%-% part III: ICA
 cfg.chanfilename = 'chans2interp.txt';
+
+%-% part IV: final cleaning
+cfg.icafilename = 'ICs2remove.txt';
+
+%-% now run it
 eegpreproc(cfg);
-
-%% part IV: final cleaning
-cfg.icafilename = 'comps2remove.txt';
-
