@@ -196,7 +196,7 @@ for subno=1:length(sublist)
             %%
             EEGm = EEG;
             m=[EEGm.event.type];
-            if ~isempty(cfg.trigger_subtract)
+            if ~isempty(trigger_subtract)
                 m=m-(trigger_subtract);
             end
 
