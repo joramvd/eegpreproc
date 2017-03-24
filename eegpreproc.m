@@ -481,6 +481,7 @@ for subno=1:length(sublist)
             chanind=1:nchan;
             subject_prefix = sublist{subno}(1:4);
             chans = chans2interp(strcmpi(chans2interp(:,1),subject_prefix),2:end);
+            bad_chansidx=[];
             if ~isempty(chans{1})
                 bad_chansidx = zeros(1,length(chans));
                 for c=1:length(chans)
