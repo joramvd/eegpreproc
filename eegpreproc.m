@@ -450,23 +450,25 @@ for subno=1:length(sublist)
             EEG.icawinv = ICAEEG.icawinv;
             EEG = eeg_checkset(EEG);
             clear ICAEEG
-
-            pop_selectcomps(EEG,[1:20]); % plot first 20 ICs
-            pop_eegplot( EEG, 0, 1, 1);  % plot the component activation
-            pop_eegplot( EEG, 1, 0, 0);
             
-            inspecting = true;
-            while inspecting
-                prompt = 'Which component do you want to inspect? (type number or "done" when done) --> ';
-                comp2check = input(prompt,'s');
-                if strcmp(comp2check,'done')
-                    inspecting = false;
-                else
-                    pop_prop( EEG, 0, str2double(comp2check));
+            if inspect_ica
+                pop_selectcomps(EEG,[1:20]); % plot first 20 ICs
+                pop_eegplot( EEG, 0, 1, 1);  % plot the component activation
+                pop_eegplot( EEG, 1, 0, 0);
+                
+                inspecting = true;
+                while inspecting
+                    prompt = 'Which component do you want to inspect? (type number or "done" when done) --> ';
+                    comp2check = input(prompt,'s');
+                    if strcmp(comp2check,'done')
+                        inspecting = false;
+                    else
+                        pop_prop( EEG, 0, str2double(comp2check));
+                    end
                 end
             end
             
-            %% Temporarily remove bad channels
+            %% Mark bad channels and ICs to remove
 
             fid=fopen([writdir chanfilename],'r');
             chans2interp={};
@@ -481,7 +483,7 @@ for subno=1:length(sublist)
             chanind=1:nchan;
             subject_prefix = sublist{subno}(1:4);
             chans = chans2interp(strcmpi(chans2interp(:,1),subject_prefix),2:end);
-            bad_chansidx=[];
+            bad_chansidx = [];
             if ~isempty(chans{1})
                 bad_chansidx = zeros(1,length(chans));
                 for c=1:length(chans)

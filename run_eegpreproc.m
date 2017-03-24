@@ -38,6 +38,7 @@ cfg.chanfilename = 'chans2interp.txt';
 
 %-% part IV: final cleaning
 cfg.icafilename = 'ICs2remove.txt';
+cfg.inspect_ica = true
 
 %-% now run it
 eegpreproc(cfg);
