@@ -355,9 +355,9 @@ for subno=1:length(sublist)
                     rejected_trials(ei) = 1;
                 end
             end
-%%            
+
             rejeegplottmp = trial2eegplot(  rejected_trials, zeros(EEG.nbchan,EEG.trials), EEG.pnts, [1 1 0.5]);
-            eegplot(EEG.data,'winrej',rejeegplottmp);
+            eegplot(EEG.data,'srate', EEG.srate,'limits', [EEG.xmin EEG.xmax]*1000 ,'eloc_file', EEG.chanlocs,'winrej',rejeegplottmp);
 
             fprintf(['At this point, do following checks:\n'...
                 '- check if rejected trials make sense, also check zsum and threshold figure\n' ...
