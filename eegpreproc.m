@@ -159,8 +159,21 @@ for subno=1:length(sublist)
             EEG = pop_biosig(sublist{subno});
             
             %%
+            % if malfunctioning/flat channels were replaced with external electrodes during measurement, replace them here
+            
+            if isfield(cfg,'replaced')
+                for k=1:size(replaced,1)
+                    EEG.data(find(strcmpi(replaced(k,1),{EEG.chanlocs.labels})),:) = EEG.data(find(strcmpi(replaced(k,2),{EEG.chanlocs.labels})),:);
+                end
+            end
+            
+            %%
             % re-reference to linked mastoids/earlobes
-            EEG = pop_reref(EEG,[find(strcmpi(reref(1),{EEG.chanlocs.labels})) find(strcmpi(reref(2),{EEG.chanlocs.labels}))],'refstate','averef');
+            if strcmp(ref,'average')
+                EEG = pop_reref(EEG,[],'refstate','averef');
+            else
+                EEG = pop_reref(EEG,[find(strcmpi(ref(1),{EEG.chanlocs.labels})) find(strcmpi(ref(2),{EEG.chanlocs.labels}))],'refstate','averef');
+            end
             
             % re-reference EOG
             veogdat = squeeze(EEG.data(strcmpi({EEG.chanlocs.labels},veog(1)),:)-EEG.data(strcmpi({EEG.chanlocs.labels},veog(2)),:));
@@ -176,9 +189,10 @@ for subno=1:length(sublist)
             
             % resample if asked for
             try
-                EEG = pop_resample(EEG,resrate);
+                if EEG.srate>resrate
+                    EEG = pop_resample(EEG,resrate);
+                end
             catch me
-                dbstop
                 disp(['No resampling done. Sampling rate is ' num2str(EEG.srate)])
             end
             
@@ -191,6 +205,8 @@ for subno=1:length(sublist)
             
             EEG=pop_chanedit(EEG,'lookup',layout);
             EEG.chanlocs(nchan+3:end)=[];
+            EEG.chanlocs(nchan+1).labels = 'VEOG';
+            EEG.chanlocs(nchan+2).labels = 'HEOG';
             
             
             %%
@@ -355,7 +371,7 @@ for subno=1:length(sublist)
                     rejected_trials(ei) = 1;
                 end
             end
-
+            
             rejeegplottmp = trial2eegplot(  rejected_trials, zeros(EEG.nbchan,EEG.trials), EEG.pnts, [1 1 0.5]);
             eegplot(EEG.data,'srate', EEG.srate,'limits', [EEG.xmin EEG.xmax]*1000 ,'eloc_file', EEG.chanlocs,'winrej',rejeegplottmp);
 
@@ -519,21 +535,20 @@ for subno=1:length(sublist)
                 disp('No components specified for this subject yet! Turn to your .txt file where you mark the components!')
             end
             
+            % remove EOG for good
+            EEG = pop_select(EEG,'nochannel',[nchan+1 nchan+2]);
+            
             if sum(bad_chansidx)>0
                 
-                EEG2 = pop_select(EEG,'nochannel',[bad_chansidx nchan+1 nchan+2]);
+                EEG2 = pop_select(EEG,'nochannel',bad_chansidx);
                 EEG2 = pop_subcomp( EEG2, comps2remove{subno,2}', 0);
                 
                 %% put IC-cleaned channels back in original EEG structure and interpolate bad ones
                 
                 good_chans = 1:EEG.nbchan;
-                if sum(bad_chansidx)>0
-                    good_chans([bad_chansidx nchan+1 nchan+2])=[];
-                    EEG.data(good_chans,:,:) = EEG2.data;
-                    EEG = eeg_interp(EEG,bad_chansidx);
-                else
-                    EEG.data(good_chans,:,:) = EEG2.data;
-                end
+                good_chans(bad_chansidx)=[];
+                EEG.data(good_chans,:,:) = EEG2.data;
+                EEG = eeg_interp(EEG,bad_chansidx);
                 
                 clear EEG2
             else

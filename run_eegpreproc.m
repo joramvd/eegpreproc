@@ -24,7 +24,7 @@ cfg.resrate     = 512;
 
 triggers={
     'conditionA'        { '1' };
-    'conditionB'       { '2' };
+    'conditionB'        { '2' };
     };
 
 cfg.epochtime   = [-1.5 7.5];
