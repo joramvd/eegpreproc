@@ -459,6 +459,8 @@ for subno=1:length(sublist)
                 load(outfilename3)
             else
                 fprintf('Final cleaning steps for subject %i of %i...\n',subno,length(sublist));
+                load(outfilename2) % reload anyway, because data have been trimmed for ICA; we need original epoch length
+                load(outfilename3)
             end
             
             for ei=1:EEG.trials
