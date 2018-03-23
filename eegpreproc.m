@@ -28,10 +28,11 @@ function eegpreproc(cfg)
 %
 % The pipeline "forks" at the first stage: one EEG version is high-pass filtered the requested
 % cut-off (e.g. 0.1 Hz) and only saved for the later final cleaning step; another version is
-% filtered at 1.5 Hz, which aids data visualization and improves ICA. All choices (trials to reject,
-% channels to interpolate, components to remove) are based on the 1.5 Hz version; the actual
-% cleaning is done on the (e.g.) 0.1 Hz version. It is not recommended to final analyses on 1.5 Hz
-% filtered data, especially for ERP analyses 0.1 or lower is recommended.
+% filtered at a higher cut-off (e.g. 1.5 Hz; 2.5 max, recommendation: between 1-2 Hz), which aids
+% data visualization and improves ICA. All choices (trials to reject, channels to interpolate,
+% components to remove) are based on the 1.5 Hz version; the actual cleaning is done on the (e.g.)
+% 0.1 Hz version. It is not recommended to final analyses on 1.5 Hz filtered data, especially for
+% ERP analyses 0.1 or lower is recommended.
 %
 % If you will do time-frequency analysis, choose a rather wide epoch window to avoid edge artifacts
 % (rule of thumb: one second longer at each side); the 1.5 Hz filtered version for artifact
@@ -83,7 +84,8 @@ function eegpreproc(cfg)
 % cfg.veog        = {'EXG1','EXG2'};
 % cfg.heog        = {'EXG3','EXG4'};
 % cfg.resrate     = 512;
-% cfg.highcut     = 0.1;
+% cfg.highcut     = 0.1; % desired high-pass of final analyses
+% cfg.icacut      = 1.5; % temporary high-pass for ICA and cleaning
 %
 % %-% part II: epoching and trial rejection marking
 %
@@ -216,7 +218,7 @@ for subno=1:length(sublist)
             % (high-pass) filter; eegfiltnew is quite fast
             try
                 EEG = pop_eegfiltnew(EEG,highcut,0);
-                EEGb = pop_eegfiltnew(EEG,1.5,0); % high edge cut-off for stable ICA
+                EEGb = pop_eegfiltnew(EEG,icacut,0); % high edge cut-off for stable ICA
             catch me
                 error('eegfiltnew not present in eeglab package!')
             end

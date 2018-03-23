@@ -19,7 +19,8 @@ cfg.reref       = {'EXG5','EXG6'};
 cfg.veog        = {'EXG1','EXG2'};
 cfg.heog        = {'EXG3','EXG4'};
 cfg.resrate     = 512;
-cfg.highcut     = .1;
+cfg.highcut     = .1; % desired high-pass filter cut-off
+cfg.icacut      = 1.5; % cut-off for ICA and visualization / cleaning decisions; final steps are done on the cut-off specified above!
 
 %-% part II: epoching and trial rejection marking
 
