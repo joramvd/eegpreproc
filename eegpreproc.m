@@ -7,35 +7,50 @@ function eegpreproc(cfg)
 %
 % This function applies the following four steps to Biosemi raw data (bdf files)
 % - 1) it imports the raw data, references the data to mastoids/earlobes, imports
-%      predefined channel layout, and applies a high-pass filter
-%      if recorded on >512 Hz sampling rate, the data are downsampled
+%      predefined channel layout, and applies a high-pass filter if recorded on >512 Hz sampling
+%      rate, the data are downsampled
 % - 2) it epochs the data around [stimulus] triggers, performs [whole-trial] baseline
-%      correction, and marks trials contaminated with EMG [muscle] artifacts (note:
-%      it does not remove the trials yet);
-%      it also saves a figure with snapshots of topographical maps showing electrode
-%      variance; this is to inspect bad electrodes that should later be interpolated
+%      correction, and marks trials contaminated with EMG [muscle] artifacts (note: it does not
+%      remove the trials yet);
+%      it also saves a figure with snapshots of topographical maps showing electrode variance; this
+%      is to inspect bad electrodes that should later be interpolated
 % - 3) performs ICA using eeglab
 % - 4) does the final cleaning by removing the bad trials, removing occulomotor
 %      artifacts captured by ICA, interpolating bad channels  (note: if interested in
-%      trial-sequence-specific information [e.g. switch-trials, correct after error trials;
-%      i.e. used for single-trial regression] one needs to adapt this part on a
-%      study-specific basis, as here the trials marked for rejection are actually removed,
-%      thus destroying the original trial sequence)
+%      trial-sequence-specific information [e.g. switch-trials, correct after error trials; i.e.
+%      used for single-trial regression] one needs to adapt this part on a study-specific basis, as
+%      here the trials marked for rejection are actually removed, thus destroying the original trial
+%      sequence)
 %
-% At every step a datafile is saved; for ICA (step #3) this only contains the weights.
-% Datafile naming assumes the first four charachters correspond to subject
-% number: pp## (where pp refers to Dutch "proefpersoon").
+% At every step a datafile is saved; for trial rejection this only contains a binary vector;  for
+% ICA (step #3) this only contains the weights. Datafile naming assumes the first four charachters
+% correspond to subject number: pp## (where pp refers to Dutch "proefpersoon").
 %
-% This function runs each step consecutively within one subject, and skips
-% previous steps if those were already saved.
-% After step #2 you need to manually specifiy which channels to interpolate
-% and after step #3 you need to manually specificy which independent components to remove
-% in custom .txt files, which the next step read in. The function is paused
-% for this and waits for input.
+% The pipeline "forks" at the first stage: one EEG version is high-pass filtered the requested
+% cut-off (e.g. 0.1 Hz) and only saved for the later final cleaning step; another version is
+% filtered at 1.5 Hz, which aids data visualization and improves ICA. All choices (trials to reject,
+% channels to interpolate, components to remove) are based on the 1.5 Hz version; the actual
+% cleaning is done on the (e.g.) 0.1 Hz version. It is not recommended to final analyses on 1.5 Hz
+% filtered data, especially for ERP analyses 0.1 or lower is recommended.
 %
-% This function can only run with properly added paths to eeglab and fieldtrip
-% The eeglab package should at least contain the function eegfiltnew (included at least in
-% v12 and up)
+% If you will do time-frequency analysis, choose a rather wide epoch window to avoid edge artifacts
+% (rule of thumb: one second longer at each side); the 1.5 Hz filtered version for artifact
+% detection will be done on a smaller window, which corresponds to your final time window of
+% interest. This is specified in the cfg structure (see below).
+%
+% Artifact rejection is done "semi-automatically": it uses an algorithm that checks for
+% above-threshold deflections of data filtered in a high-frequency band (110-140 Hz); code is
+% borrowed from the Fieldtrip routines. The result is included in the EEGLAB structure and plotted,
+% so you can manually go over the automatic detection, and add/remove where you disagree. 
+%
+% This function runs each step consecutively within one subject, and skips previous steps if those
+% were already saved.
+% After step #2 you need to manually specifiy which channels to interpolate and after step #3 you
+% need to manually specificy which independent components to remove in custom .txt files, which the
+% next step read in. The function is paused for this and waits for input.
+%
+% This function can only run with properly added paths to eeglab and fieldtrip. The eeglab package
+% should at least contain the function eegfiltnew (included at least in v12 and up)
 %
 % This function requires as input a cfg (inspired by how Fieldtrip handles functions)
 % This cfg should contain the following study-specific info:
@@ -68,6 +83,7 @@ function eegpreproc(cfg)
 % cfg.veog        = {'EXG1','EXG2'};
 % cfg.heog        = {'EXG3','EXG4'};
 % cfg.resrate     = 512;
+% cfg.highcut     = 0.1;
 %
 % %-% part II: epoching and trial rejection marking
 %
@@ -78,7 +94,7 @@ function eegpreproc(cfg)
 %     };
 %
 % cfg.epochtime   = [-1.5 2.5];
-% cfg.artiftime   = [-0.5 1];
+% cfg.artiftime   = [-0.5 1.5];
 % cfg.artcutoff   = 12;
 % cfg.triggers    = triggers;
 % cfg.trigger_subtract = []; % depending on physical lab settings, sometimes weird high numbers get added to the trigger values specified in your experiment script
@@ -137,8 +153,9 @@ for subno=1:length(sublist)
     
     % filenames assume a sensible basename of the raw .bdf file
     outfilename1=[ writdir sublist{subno}(1:4) filesep sublist{subno}(1:4) '_' projectname '_reref_hpfilt.mat' ];
-    outfilename2=[ writdir sublist{subno}(1:4) filesep sublist{subno}(1:4) '_' projectname '_epoched_rejectedtrials.mat' ];
-    outfilename3=[ writdir sublist{subno}(1:4) filesep sublist{subno}(1:4) '_' projectname '_epoched_icaweights.mat' ];
+    outfilename1b=[ writdir sublist{subno}(1:4) filesep sublist{subno}(1:4) '_' projectname '_reref_hpfilt_4ica.mat' ];
+    outfilename2=[ writdir sublist{subno}(1:4) filesep sublist{subno}(1:4) '_' projectname '_rejectedtrials.mat' ];
+    outfilename3=[ writdir sublist{subno}(1:4) filesep sublist{subno}(1:4) '_' projectname '_icaweights.mat' ];
     outfilename4=[ writdir sublist{subno}(1:4) filesep sublist{subno}(1:4) '_' projectname '_epoched_cleaned.mat' ];
     
     % do all steps consecutively for one subject, or go to the step where
@@ -198,12 +215,14 @@ for subno=1:length(sublist)
             
             % (high-pass) filter; eegfiltnew is quite fast
             try
-                EEG = pop_eegfiltnew(EEG,.5,0);
+                EEG = pop_eegfiltnew(EEG,highcut,0);
+                EEGb = pop_eegfiltnew(EEG,1.5,0); % high edge cut-off for stable ICA
             catch me
                 error('eegfiltnew not present in eeglab package!')
             end
             
             EEG=pop_chanedit(EEG,'lookup',layout);
+            EEGb=pop_chanedit(EEGb,'lookup',layout);
             EEG.chanlocs(nchan+3:end)=[];
             EEG.chanlocs(nchan+1).labels = 'VEOG';
             EEG.chanlocs(nchan+2).labels = 'HEOG';
@@ -228,30 +247,28 @@ for subno=1:length(sublist)
             keyboard
             
             %%
-            EEG= EEGm;
-            
-            %% Eye-tracking synchronization
-            
-            EEG = eeg_checkset( EEG );
-            
+            EEG.event  = EEGm.event;
+            EEGb.event = EEGm.event;
+                        
             %%
             disp('Saving data of step I')
             save(outfilename1,'EEG')
+            save(outfilename1b,'EEGb')
             reload = false;
             
         elseif ~exist(outfilename2,'file')
             
             if reload
                 fprintf('Loading subject %i of %i for epoching and bad trial marking...\n',subno,length(sublist));
-                load(outfilename1)
+                load(outfilename1b)
             else
                 fprintf('Epoching and bad trial marking for subject %i of %i...\n',subno,length(sublist));
             end
             
             %% Epoch the data
             
-            EEG = pop_epoch( EEG, [triggers{:,2}],[epochtime(1) epochtime(2)]);
-            EEG = applytochannels(EEG, 1:nchan ,' pop_rmbase( EEG, []);');
+            EEGb = pop_epoch( EEGb, [triggers{:,2}],[artiftime]);
+            EEGb = pop_rmbase( EEGb, []);
             
             %% check for bad channels
             
@@ -259,30 +276,30 @@ for subno=1:length(sublist)
                 % divide data into data blocks of 10
                 figure;
                 nblocks = 10;
-                ntrials=floor(EEG.trials/nblocks);
+                ntrials=floor(EEGb.trials/nblocks);
                 for b=1:nblocks
                     subplot(3,ceil(nblocks/3),b)
-                    newdata = reshape(squeeze(EEG.data(1:nchan,:,1+((b-1)*ntrials):b*ntrials)),nchan,size(EEG.data,2)*ntrials);
+                    newdata = reshape(squeeze(EEGb.data(1:nchan,:,1+((b-1)*ntrials):b*ntrials)),nchan,size(EEGb.data,2)*ntrials);
                     zstd = std(zscore(newdata),[],2);
-                    topoplot(zstd,EEG.chanlocs(1:nchan),'electrodes','on','maplimits',[min(zstd) max(zstd)]);
+                    topoplot(zstd,EEGb.chanlocs(1:nchan),'electrodes','on','maplimits',[min(zstd) max(zstd)]);
                     colorbar
                 end
                 colormap hot
                 saveas(gcf,[writdir sublist{subno}(1:4) filesep sublist{subno}(1:4) '_bad_electrode_check.png'])
                 figure
                 subplot(211)
-                topoplot([],EEG.chanlocs(1:nchan),'style','empty','electrodes','labels');
+                topoplot([],EEGb.chanlocs(1:nchan),'style','empty','electrodes','labels');
                 subplot(212)
-                topoplot([],EEG.chanlocs(1:nchan),'style','empty','electrodes','numbers');
+                topoplot([],EEGb.chanlocs(1:nchan),'style','empty','electrodes','numbers');
                 keyboard
             end
             
             %% custom-written artifact rejection based on Fieldtrip routines
             
-            FT_EEG = eeglab2ft(EEG);
+            FT_EEG = eeglab2ft(EEGb);
             
             cfg = [];
-            cfg.channel = {EEG.chanlocs(1:nchan).labels}';
+            cfg.channel = {EEGb.chanlocs(1:nchan).labels}';
             dat = ft_selectdata(cfg,FT_EEG);
             dat = dat.trial;
             dat_filt = cell(size(dat));
@@ -300,7 +317,7 @@ for subno=1:length(sublist)
             
             %-% loop over trials
             reverseStr='';
-            numtrl=EEG.trials;
+            numtrl=EEGb.trials;
             tidx = dsearchn(FT_EEG.time{1}',cfg.art_time')';
             
             for ei=1:numtrl
@@ -311,9 +328,9 @@ for subno=1:length(sublist)
                 reverseStr = repmat(sprintf('\b'), 1, length(msg));
                 
                 % filter in high-freq band
-                tmpdat = ft_preproc_bandpassfilter(dat{ei},EEG.srate, cfg.bpfreq, cfg.bpfiltord, cfg.bpfilttype);
+                tmpdat = ft_preproc_bandpassfilter(dat{ei},EEGb.srate, cfg.bpfreq, cfg.bpfiltord, cfg.bpfilttype);
                 tmpdat = ft_preproc_hilbert(tmpdat,cfg.hilbert);
-                nsmp = round(cfg.boxcar*EEG.srate);
+                nsmp = round(cfg.boxcar*EEGb.srate);
                 if ~rem(nsmp,2)
                     % the kernel should have an odd number of samples
                     nsmp = nsmp+1;
@@ -372,8 +389,8 @@ for subno=1:length(sublist)
                 end
             end
             
-            rejeegplottmp = trial2eegplot(  rejected_trials, zeros(EEG.nbchan,EEG.trials), EEG.pnts, [1 1 0.5]);
-            eegplot(EEG.data,'srate', EEG.srate,'limits', [EEG.xmin EEG.xmax]*1000 ,'eloc_file', EEG.chanlocs,'winrej',rejeegplottmp);
+            rejeegplottmp = trial2eegplot(  rejected_trials, zeros(EEGb.nbchan,EEGb.trials), EEGb.pnts, [1 1 0.5]);
+            eegplot(EEGb.data,'srate', EEGb.srate,'limits', [EEGb.xmin EEGb.xmax]*1000 ,'eloc_file', EEGb.chanlocs,'winrej',rejeegplottmp);
 
             fprintf(['At this point, do following checks:\n'...
                 '- check if rejected trials make sense, also check zsum and threshold figure\n' ...
@@ -386,7 +403,7 @@ for subno=1:length(sublist)
 
             h=get(gcf);
             tmprej = h.UserData.winrej;
-            tmprej = eegplot2trial(tmprej,EEG.pnts,EEG.trials);
+            tmprej = eegplot2trial(tmprej,EEGb.pnts,EEGb.trials);
             close 'Scroll activity -- eegplot()'
 
             if sum(tmprej)~=sum(rejected_trials)
@@ -396,14 +413,17 @@ for subno=1:length(sublist)
             
             %%
             disp('Saving data of step II')
-            save(outfilename2,'EEG','rejected_trials','cfg'); % the cfg variable contains the rejection settings, so these can be traced back (e.g. z-val cutoff)
+            save(outfilename2,'rejected_trials','cfg'); % the cfg variable contains the rejection settings, so these can be traced back (e.g. z-val cutoff)
             reload = false;
             
         elseif ~exist(outfilename3,'file')
             
             if reload
                 fprintf('Loading subject %i of %i for ICA...\n',subno,length(sublist));
+                load(outfilename1b)
                 load(outfilename2)
+                EEGb = pop_epoch( EEGb, [triggers{:,2}],[artiftime]);
+                EEGb = pop_rmbase( EEGb, []);
             else
                 fprintf('Running ICA for subject %i of %i...\n',subno,length(sublist));
             end
@@ -411,8 +431,7 @@ for subno=1:length(sublist)
             %% Independent Component Analysis
             
             % remove trials with artifacts detected in previous step
-            EEG=pop_select(EEG,'notrial',find(rejected_trials));
-            EEG=pop_select(EEG,'time', artiftime);
+            EEGb = pop_select(EEGb,'notrial',find(rejected_trials));
             
             %% sets bad channels to zero if necessary
             
@@ -432,7 +451,7 @@ for subno=1:length(sublist)
             if ~isempty(chans{1})
                 bad_chansidx = zeros(1,length(chans));
                 for c=1:length(chans)
-                    if ~isempty(chans{c}), bad_chansidx(c) = find(strcmpi({EEG.chanlocs.labels},chans(c))); end
+                    if ~isempty(chans{c}), bad_chansidx(c) = find(strcmpi({EEGb.chanlocs.labels},chans(c))); end
                 end
                 bad_chansidx(bad_chansidx==0)=[];
                 chanind(bad_chansidx)=[];
@@ -440,11 +459,11 @@ for subno=1:length(sublist)
             
             %% run ICA
             
-            EEG=pop_runica(EEG,'icatype','runica','dataset',1,'options',{'extended',1},'chanind',chanind);
-            ICAEEG.icawinv = EEG.icawinv;
-            ICAEEG.icasphere = EEG.icasphere;
-            ICAEEG.icaweights = EEG.icaweights;
-            ICAEEG.icachansind = EEG.icachansind;
+            EEGb=pop_runica(EEGb,'icatype','runica','dataset',1,'options',{'extended',1},'chanind',chanind);
+            ICAEEG.icawinv = EEGb.icawinv;
+            ICAEEG.icasphere = EEGb.icasphere;
+            ICAEEG.icaweights = EEGb.icaweights;
+            ICAEEG.icachansind = EEGb.icachansind;
             
             %%
             disp('Saving data of step III')
@@ -455,35 +474,30 @@ for subno=1:length(sublist)
             
             if reload
                 fprintf('Loading subject %i of %i for final cleaning...\n',subno,length(sublist));
+                load(outfilename1)
+                load(outfilename1b)
                 load(outfilename2)
                 load(outfilename3)
+                
+                EEGb = pop_epoch( EEGb, [triggers{:,2}],[artiftime]);
+                EEGb = pop_rmbase( EEGb, []);
+                EEGb = pop_select(EEGb,'notrial',find(rejected_trials));
+                EEGb.icachansind = ICAEEG.icachansind;
+                EEGb.icasphere = ICAEEG.icasphere;
+                EEGb.icaweights = ICAEEG.icaweights;
+                EEGb.icawinv = ICAEEG.icawinv;
+                EEGb = eeg_checkset(EEGb);
+
             else
                 fprintf('Final cleaning steps for subject %i of %i...\n',subno,length(sublist));
-                load(outfilename2) % reload anyway, because data have been trimmed for ICA; we need original epoch length
-                load(outfilename3)
             end
-            
-            for ei=1:EEG.trials
-                EEG.epoch(ei).trialnum = ei;
-            end
-            
-            %% remove artifact and error trials
-            
-            EEG=pop_select(EEG,'notrial',find(rejected_trials));
-            
-            %% add ICA weights to EEG structure and inspect components
-            
-            EEG.icachansind = ICAEEG.icachansind;
-            EEG.icasphere = ICAEEG.icasphere;
-            EEG.icaweights = ICAEEG.icaweights;
-            EEG.icawinv = ICAEEG.icawinv;
-            EEG = eeg_checkset(EEG);
-            clear ICAEEG
+                                    
+            %% inspect components
             
             if inspect_ica
-                pop_selectcomps(EEG,[1:20]); % plot first 20 ICs
-                pop_eegplot( EEG, 0, 1, 1);  % plot the component activation
-                pop_eegplot( EEG, 1, 0, 0);
+                pop_selectcomps(EEGb,[1:20]); % plot first 20 ICs
+                pop_eegplot( EEGb, 0, 1, 1);  % plot the component activation
+                pop_eegplot( EEGb, 1, 0, 0);
                 
                 inspecting = true;
                 while inspecting
@@ -492,10 +506,11 @@ for subno=1:length(sublist)
                     if strcmp(comp2check,'done')
                         inspecting = false;
                     else
-                        pop_prop( EEG, 0, str2double(comp2check));
+                        pop_prop( EEGb, 0, str2double(comp2check));
                     end
                 end
             end
+            clear EEGb
             
             %% Mark bad channels and ICs to remove
             
@@ -537,6 +552,29 @@ for subno=1:length(sublist)
                 disp('No components specified for this subject yet! Turn to your .txt file where you mark the components!')
             end
             
+            %% do the cleaning:
+            %- epoch in wider window
+            %- baseline correct
+            %- reject trials
+            %- add ICA weights
+            %- remove EOG
+            %- interpolate channels
+            %- remove components
+            
+            EEG = pop_epoch( EEG, [triggers{:,2}],epochtime);
+            EEG = pop_rmbase( EEG, []);
+            for ei=1:EEG.trials
+                EEG.epoch(ei).trialnum = ei;
+            end
+            EEG = pop_select(EEG,'notrial',find(rejected_trials));
+
+            EEG.icachansind = ICAEEG.icachansind;
+            EEG.icasphere = ICAEEG.icasphere;
+            EEG.icaweights = ICAEEG.icaweights;
+            EEG.icawinv = ICAEEG.icawinv;
+            EEG = eeg_checkset(EEG);
+            clear ICAEEG
+            
             % remove EOG for good
             EEG = pop_select(EEG,'nochannel',[nchan+1 nchan+2]);
             
@@ -556,6 +594,7 @@ for subno=1:length(sublist)
             else
                 EEG = pop_subcomp( EEG, comps2remove{subno,2}', 0);
             end
+            clear EEGb
             
             %%
             disp('Saving data of step IV, done preprocessing for this subject!')
