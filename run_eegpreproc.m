@@ -15,7 +15,7 @@ cfg.layout      = [cfg.eeglab_path '/plugins/dipfit2.2/standard_BESA/standard-10
 cfg.projectname = 'a_sensible_name';
 
 cfg.nchan       = 64;
-cfg.reref       = {'EXG5','EXG6'};
+cfg.ref         = {'EXG5','EXG6'};
 cfg.veog        = {'EXG1','EXG2'};
 cfg.heog        = {'EXG3','EXG4'};
 cfg.resrate     = 512;
